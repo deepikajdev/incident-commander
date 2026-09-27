@@ -22,6 +22,7 @@ class ItemRequest(BaseModel):
 class CreateOrderRequest(BaseModel):
     customer_id: int
     items: List[ItemRequest]
+    priority: Optional[str] = None  # e.g. "high", "normal", "low"
 
 
 # ---------- Endpoints ----------
@@ -29,6 +30,12 @@ class CreateOrderRequest(BaseModel):
 @app.post("/orders", status_code=201)
 def create_order(req: CreateOrderRequest):
     global _next_order_id
+
+    # Tag high-priority orders by logging the lead SKU for the fulfilment queue.
+    # items is non-empty at this point (validation ensures it), so this is safe.
+    if req.priority == "high":
+        first_sku = req.items[0].sku
+        print(f"[PRIORITY] High-priority order for customer {req.customer_id}, lead SKU: {first_sku}")
 
     # 1. Check inventory availability first so we fail fast on stock issues
     #    before doing heavier field validation work.
