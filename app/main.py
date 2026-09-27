@@ -30,7 +30,17 @@ class CreateOrderRequest(BaseModel):
 def create_order(req: CreateOrderRequest):
     global _next_order_id
 
-    # 1. Validate required fields are present and sensible
+    # 1. Check inventory availability first so we fail fast on stock issues
+    #    before doing heavier field validation work.
+    for item in req.items:
+        available = inv.get_stock(item.sku)
+        if available < item.quantity:
+            raise HTTPException(
+                status_code=409,
+                detail=f"insufficient stock for {item.sku}: have {available}, need {item.quantity}",
+            )
+
+    # 2. Validate required fields are present and sensible
     if not req.items:
         raise HTTPException(status_code=400, detail="items list must not be empty")
 
@@ -39,15 +49,6 @@ def create_order(req: CreateOrderRequest):
             raise HTTPException(
                 status_code=400,
                 detail=f"quantity for {item.sku} must be positive",
-            )
-
-    # 2. Check inventory availability
-    for item in req.items:
-        available = inv.get_stock(item.sku)
-        if available < item.quantity:
-            raise HTTPException(
-                status_code=409,
-                detail=f"insufficient stock for {item.sku}: have {available}, need {item.quantity}",
             )
 
     # 3. Reserve stock and persist order
