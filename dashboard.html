@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Incident Commander — #1042</title>
+<style>
+/* ── Reset ───────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:         #090B0E;
+  --surface:    #0F1215;
+  --surface2:   #141820;
+  --border:     #1E242C;
+  --border-hi:  #2E3844;
+  --text:       #C8CDD4;
+  --muted:      #5A6370;
+  --red:        #C94040;
+  --red-dim:    #2A0F0F;
+  --green:      #3E8B5A;
+  --green-dim:  #0A1E12;
+  --amber:      #C98B2A;
+  --amber-dim:  #231A07;
+  --mono:       "JetBrains Mono", "Fira Code", "Cascadia Code", ui-monospace, monospace;
+  --sans:       "Inter", "Segoe UI", system-ui, sans-serif;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* ── Shared ──────────────────────────────────────────────────────────── */
+.page-wrap { max-width: 960px; margin: 0 auto; padding: 40px 24px 120px; }
+
+.section { margin-bottom: 56px; }
+
+.section-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  margin-bottom: 20px;
+}
+
+.mono { font-family: var(--mono); }
+.muted { color: var(--muted); }
+
+/* ── Section 1: Incident Overview ───────────────────────────────────── */
+.inc-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.inc-id {
+  font-family: var(--mono);
+  font-size: 38px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -.01em;
+  line-height: 1;
+}
+
+.inc-badges {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.badge {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border: 1px solid;
+}
+.badge.critical { color: var(--red);   border-color: var(--red);   background: var(--red-dim); }
+.badge.status   { color: var(--amber); border-color: var(--amber); background: var(--amber-dim); }
+.badge.resolved { color: var(--green); border-color: var(--green); background: var(--green-dim); }
+
+.inc-meta {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 20px;
+  max-width: 720px;
+}
+.inc-meta .k {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-top: 1px;
+  white-space: nowrap;
+}
+.inc-meta .v {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+.inc-meta .v.err { color: var(--red); }
+
+.stack-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 18px 0 6px;
+}
+.stack-block {
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.7;
+  color: #7A8C9E;
+  background: #06080A;
+  border: 1px solid var(--border);
+  padding: 14px 16px;
+  overflow-x: auto;
+  white-space: pre;
+}
+.stack-block .hl { color: var(--red); font-weight: 600; }
+
+/* ── Section 2: AI Investigation ────────────────────────────────────── */
+.agent-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+@media (max-width: 800px) { .agent-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 460px) { .agent-grid { grid-template-columns: 1fr; } }
+
+.agent-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: border-color .2s;
+  position: relative;
+  overflow: hidden;
+}
+.agent-card:hover { border-color: var(--border-hi); }
+
+.agent-head {
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.agent-name {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.agent-status {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border: 1px solid var(--border-hi);
+  color: var(--muted);
+}
+.agent-status.running {
+  color: var(--amber);
+  border-color: var(--amber);
+  animation: pulse-border 1.4s ease-in-out infinite;
+}
+.agent-status.complete {
+  color: var(--green);
+  border-color: var(--green);
+}
+@keyframes pulse-border {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .45; }
+}
+
+.agent-preview {
+  padding: 12px 14px;
+  min-height: 80px;
+}
+.agent-preview-key {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .08em;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+.agent-preview-val {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  line-height: 1.5;
+}
+.agent-loading {
+  padding: 16px 14px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: .08em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 80px;
+}
+
+.agent-detail {
+  display: none;
+  border-top: 1px solid var(--border);
+  padding: 14px;
+  background: var(--surface2);
+}
+.agent-card.expanded .agent-detail { display: block; }
+.agent-card.expanded { border-color: var(--border-hi); }
+
+.detail-row { margin-bottom: 10px; }
+.detail-row:last-child { margin-bottom: 0; }
+.detail-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.detail-val {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  line-height: 1.55;
+}
+
+/* suspect rows */
+.suspect { margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.suspect:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.suspect-sha { font-family: var(--mono); font-size: 11px; color: var(--amber); }
+.suspect-msg { font-size: 11px; color: var(--text); margin: 2px 0; }
+.suspect-bar { height: 2px; background: var(--border); margin: 4px 0; }
+.suspect-fill { height: 100%; background: var(--amber); transition: width .6s ease; }
+.suspect-fill.top { background: var(--red); }
+.suspect-reason { font-size: 10px; color: var(--muted); line-height: 1.5; }
+
+/* data agent notes */
+.data-note { font-size: 10px; color: var(--muted); padding: 3px 0; border-bottom: 1px solid var(--border); }
+.data-note:last-child { border-bottom: none; }
+
+/* test counts */
+.test-nums { display: flex; gap: 16px; margin-bottom: 8px; }
+.test-num .n { font-family: var(--mono); font-size: 24px; font-weight: 700; line-height: 1; }
+.test-num .n.p { color: var(--green); }
+.test-num .n.f { color: var(--red); }
+.test-num .n.t { color: var(--muted); }
+.test-num .l { font-family: var(--mono); font-size: 8px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
+
+/* ── Section 3: Root Cause ───────────────────────────────────────────── */
+.rc-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--amber);
+  padding: 28px 28px 24px;
+}
+
+.rc-summary {
+  font-family: var(--sans);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+  margin-bottom: 6px;
+}
+.rc-summary-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.rc-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.rc-sha {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--amber);
+}
+.rc-conf {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border: 1px solid;
+}
+.rc-conf.high   { color: var(--red);   border-color: var(--red);   background: var(--red-dim); }
+.rc-conf.medium { color: var(--amber); border-color: var(--amber); background: var(--amber-dim); }
+.rc-conf.low    { color: var(--muted); border-color: var(--muted); }
+
+.rc-explanation {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.7;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  margin-bottom: 20px;
+}
+
+.evidence-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.evidence-list { list-style: none; }
+.ev-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.5;
+}
+.ev-item:last-child { border-bottom: none; }
+.ev-icon { flex-shrink: 0; width: 12px; font-size: 11px; text-align: center; }
+.ev-icon.ok  { color: var(--green); }
+.ev-icon.out { color: var(--muted); }
+.ev-text { flex: 1; color: var(--text); }
+.ev-text.out { color: var(--muted); }
+
+/* ── Section 4: Remediation ─────────────────────────────────────────── */
+.diff-block {
+  font-family: var(--mono);
+  font-size: 12px;
+  border: 1px solid var(--border);
+  overflow-x: auto;
+  margin-bottom: 20px;
+}
+.diff-header {
+  font-size: 9px;
+  letter-spacing: .1em;
+  color: var(--muted);
+  background: var(--surface2);
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.diff-line {
+  padding: 4px 12px;
+  white-space: pre;
+  line-height: 1.6;
+}
+.diff-line.minus { background: rgba(201, 64, 64, .12); color: #D07070; }
+.diff-line.plus  { background: rgba(62, 139, 90, .12);  color: #70A880; }
+.diff-line.minus::before { content: "- "; color: var(--red); }
+.diff-line.plus::before  { content: "+ "; color: var(--green); }
+
+.fix-explanation {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.apply-btn {
+  background: transparent;
+  border: 1px solid var(--border-hi);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 10px 28px;
+  cursor: pointer;
+  transition: border-color .2s, color .2s;
+}
+.apply-btn:hover:not(:disabled) { border-color: var(--green); color: var(--green); }
+.apply-btn:disabled { opacity: .4; cursor: default; }
+
+/* ── Section 5: Verification ────────────────────────────────────────── */
+.verify-checks { margin-bottom: 24px; }
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity .3s ease, transform .3s ease;
+}
+.check-row:last-child { border-bottom: none; }
+.check-row.visible { opacity: 1; transform: none; }
+.check-icon { width: 14px; text-align: center; font-size: 11px; flex-shrink: 0; }
+.check-icon.ok  { color: var(--green); }
+.check-icon.fail { color: var(--red); }
+.check-name { flex: 1; color: var(--text); }
+.check-detail { color: var(--muted); font-size: 10px; }
+
+.verify-counter {
+  font-family: var(--mono);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--green);
+  margin-bottom: 32px;
+  opacity: 0;
+  transition: opacity .5s ease .2s;
+}
+.verify-counter .denom { font-size: 18px; color: var(--muted); }
+.verify-counter.show { opacity: 1; }
+
+.resolved-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 32px 0 16px;
+  border-top: 1px solid var(--border);
+}
+.resolved-stamp {
+  border: 2px solid var(--green);
+  padding: 14px 40px;
+  text-align: center;
+  transform: rotate(-1.5deg) scale(.9);
+  opacity: 0;
+  transition: opacity .5s ease .3s, transform .5s ease .3s;
+  position: relative;
+}
+/* grain overlay */
+.resolved-stamp::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='.06'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+.resolved-stamp.show { opacity: 1; transform: rotate(-1.5deg) scale(1); }
+.stamp-word {
+  font-family: var(--mono);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: .22em;
+  color: var(--green);
+  text-transform: uppercase;
+}
+.stamp-sub {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .14em;
+  color: var(--muted);
+  margin-top: 4px;
+  text-transform: uppercase;
+}
+
+/* ── Spinner ─────────────────────────────────────────────────────────── */
+.spinner {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border: 1px solid var(--border-hi);
+  border-top-color: var(--amber);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Loading / error ─────────────────────────────────────────────────── */
+.loading-row {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--muted); letter-spacing: .08em;
+  padding: 20px 0;
+}
+.err-banner {
+  background: var(--red-dim);
+  border: 1px solid var(--red);
+  color: var(--red);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 12px 16px;
+  margin-top: 12px;
+}
+</style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <!-- ── SECTION 1: INCIDENT OVERVIEW ───────────────────────────────── -->
+  <section class="section" id="s1">
+    <div class="section-label">Incident Overview</div>
+    <div id="inc-content">
+      <div class="loading-row"><span class="spinner"></span>Loading incident data...</div>
+    </div>
+  </section>
+
+  <!-- ── SECTION 2: AI INVESTIGATION ───────────────────────────────── -->
+  <section class="section" id="s2" style="display:none">
+    <div class="section-label">AI Investigation</div>
+    <div class="agent-grid">
+
+      <div class="agent-card" id="card-log" onclick="toggleCard('card-log')">
+        <div class="agent-head">
+          <span class="agent-name">Log Agent</span>
+          <span class="agent-status running" id="st-log">Running</span>
+        </div>
+        <div id="prev-log" class="agent-loading"><span class="spinner"></span>Parsing logs...</div>
+        <div class="agent-detail" id="det-log"></div>
+      </div>
+
+      <div class="agent-card" id="card-code" onclick="toggleCard('card-code')">
+        <div class="agent-head">
+          <span class="agent-name">Code Agent</span>
+          <span class="agent-status running" id="st-code">Running</span>
+        </div>
+        <div id="prev-code" class="agent-loading"><span class="spinner"></span>Analysing commits...</div>
+        <div class="agent-detail" id="det-code"></div>
+      </div>
+
+      <div class="agent-card" id="card-data" onclick="toggleCard('card-data')">
+        <div class="agent-head">
+          <span class="agent-name">Database Agent</span>
+          <span class="agent-status running" id="st-data">Running</span>
+        </div>
+        <div id="prev-data" class="agent-loading"><span class="spinner"></span>Checking data layer...</div>
+        <div class="agent-detail" id="det-data"></div>
+      </div>
+
+      <div class="agent-card" id="card-test" onclick="toggleCard('card-test')">
+        <div class="agent-head">
+          <span class="agent-name">Test Agent</span>
+          <span class="agent-status running" id="st-test">Running</span>
+        </div>
+        <div id="prev-test" class="agent-loading"><span class="spinner"></span>Running tests...</div>
+        <div class="agent-detail" id="det-test"></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── SECTION 3: ROOT CAUSE ──────────────────────────────────────── -->
+  <section class="section" id="s3" style="display:none">
+    <div class="section-label">Root Cause</div>
+    <div id="rc-content">
+      <div class="loading-row"><span class="spinner"></span>Synthesising findings...</div>
+    </div>
+  </section>
+
+  <!-- ── SECTION 4: REMEDIATION ─────────────────────────────────────── -->
+  <section class="section" id="s4" style="display:none">
+    <div class="section-label">Remediation</div>
+    <div id="fix-content">
+      <div class="loading-row"><span class="spinner"></span>Generating fix...</div>
+    </div>
+  </section>
+
+  <!-- ── SECTION 5: VERIFICATION ───────────────────────────────────── -->
+  <section class="section" id="s5" style="display:none">
+    <div class="section-label">Verification</div>
+    <div id="verify-content"></div>
+  </section>
+
+</div><!-- /page-wrap -->
+
+<script>
+const API = 'http://localhost:8001';
+let _report = null;  // holds the full /investigate-incident response
+
+// ── Utilities ─────────────────────────────────────────────────────────
+
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+function show(id) {
+  const el = document.getElementById(id);
+  el.style.display = '';
+}
+
+function highlightStack(raw) {
+  return esc(raw)
+    .replace(/(IndexError[^\n]*)/g, '<span class="hl">$1</span>')
+    .replace(/(first_sku = req\.items\[0\]\.sku[^\n]*)/g, '<span class="hl">$1</span>');
+}
+
+function fmtTs(ts) {
+  try { return new Date(ts).toLocaleString(); } catch(e) { return ts; }
+}
+
+// ── Section 1 ─────────────────────────────────────────────────────────
+
+function renderIncident(incidentId, incident) {
+  return `
+    <div class="inc-header">
+      <div>
+        <div class="inc-id">INCIDENT #${esc(incidentId)}</div>
+        <div class="inc-badges">
+          <span class="badge critical">Critical</span>
+          <span class="badge status" id="inc-status-badge">Investigating</span>
+        </div>
+      </div>
+    </div>
+    <div class="inc-meta">
+      <span class="k">Timestamp</span>
+      <span class="v">${esc(fmtTs(incident.timestamp))}</span>
+      <span class="k">Endpoint</span>
+      <span class="v">${esc(incident.endpoint)}</span>
+      <span class="k">Status</span>
+      <span class="v err">${esc(incident.status_code)}</span>
+      <span class="k">Error type</span>
+      <span class="v err">${esc(incident.error_type)}</span>
+      <span class="k">Request body</span>
+      <span class="v">${esc(JSON.stringify(incident.request_body))}</span>
+    </div>
+    <div class="stack-label">Stack Trace</div>
+    <div class="stack-block"><code>${highlightStack(incident.stack_trace)}</code></div>
+  `;
+}
+
+// ── Section 2 helpers ─────────────────────────────────────────────────
+
+function setAgentDone(id) {
+  const st = document.getElementById('st-' + id);
+  st.textContent = 'Complete';
+  st.className = 'agent-status complete';
+}
+
+function renderLogPreview(a) {
+  return `
+    <div class="agent-preview">
+      <div class="agent-preview-key">Error Signature</div>
+      <div class="agent-preview-val">${esc(a.error_signature)}</div>
+    </div>`;
+}
+function renderLogDetail(a) {
+  return `
+    <div class="detail-row">
+      <div class="detail-label">Error Signature</div>
+      <div class="detail-val">${esc(a.error_signature)}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Occurrence Pattern</div>
+      <div class="detail-val">${esc(a.occurrences_pattern)}</div>
+    </div>`;
+}
+
+function renderCodePreview(a) {
+  const top = (a.suspects || [])[0] || {};
+  return `
+    <div class="agent-preview">
+      <div class="agent-preview-key">Top Suspect</div>
+      <div class="agent-preview-val">${esc(top.sha || '—')}  ${esc((top.suspicion_score != null ? (top.suspicion_score * 100).toFixed(0) + '%' : ''))}</div>
+    </div>`;
+}
+function renderCodeDetail(a) {
+  const suspects = (a.suspects || []).slice(0, 4);
+  if (!suspects.length) return '<div class="detail-val muted">No commits found.</div>';
+  return suspects.map((s, i) => `
+    <div class="suspect">
+      <div class="suspect-sha">${esc(s.sha)}</div>
+      <div class="suspect-msg">${esc(s.message)}</div>
+      <div class="suspect-bar"><div class="suspect-fill${i === 0 ? ' top' : ''}" style="width:${Math.round((s.suspicion_score || 0) * 100)}%"></div></div>
+      <div class="suspect-reason">${esc(s.reasoning)}</div>
+    </div>`).join('');
+}
+
+function renderDataPreview(a) {
+  return `
+    <div class="agent-preview">
+      <div class="agent-preview-key">Data Layer</div>
+      <div class="agent-preview-val">${esc(a.data_layer_type)} &mdash; ruled out</div>
+    </div>`;
+}
+function renderDataDetail(a) {
+  const notes = (a.structural_notes || []);
+  return `
+    <div class="detail-row">
+      <div class="detail-label">Health Check</div>
+      <div class="detail-val">${esc(a.health_check)}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Structural Notes</div>
+      <div>${notes.map(n => `<div class="data-note">${esc(n)}</div>`).join('')}</div>
+    </div>
+    <div style="font-family:var(--mono);font-size:9px;color:var(--border-hi);letter-spacing:.06em;text-transform:uppercase;margin-top:10px">
+      Structural check — not live DB monitoring
+    </div>`;
+}
+
+function renderTestPreview(a) {
+  const tr = a.test_results || {};
+  return `
+    <div class="agent-preview">
+      <div class="agent-preview-key">Tests</div>
+      <div class="agent-preview-val">${esc(tr.passed)}/${esc(tr.total)} passed</div>
+    </div>`;
+}
+function renderTestDetail(a) {
+  const tr = a.test_results || {};
+  const f = (tr.total || 0) - (tr.passed || 0);
+  return `
+    <div class="detail-row">
+      <div class="test-nums">
+        <div class="test-num"><div class="n p">${tr.passed ?? 0}</div><div class="l">Passed</div></div>
+        <div class="test-num"><div class="n f">${f}</div><div class="l">Failed</div></div>
+        <div class="test-num"><div class="n t">${tr.total ?? 0}</div><div class="l">Total</div></div>
+      </div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Correlation</div>
+      <div class="detail-val">${esc(a.log_correlation)}</div>
+    </div>`;
+}
+
+function toggleCard(id) {
+  const card = document.getElementById(id);
+  card.classList.toggle('expanded');
+}
+
+// ── Section 3 ─────────────────────────────────────────────────────────
+
+function renderRootCause(rc, evidence) {
+  const conf = (rc.confidence || 'low').toLowerCase();
+  const items = (evidence || []).map(e => {
+    const ok = e.confirmed !== false;
+    return `<li class="ev-item">
+      <span class="ev-icon ${ok ? 'ok' : 'out'}">${ok ? '&#10003;' : '&ndash;'}</span>
+      <span class="ev-text${ok ? '' : ' out'}">${esc(e.statement)}</span>
+    </li>`;
+  }).join('');
+
+  return `
+    <div class="rc-card">
+      <div class="rc-summary-label">Likely cause</div>
+      <div class="rc-summary">${esc(rc.one_line_summary || rc.explanation || '')}</div>
+      <div class="rc-meta">
+        <span class="rc-sha">${esc(rc.commit_sha || 'unknown')}</span>
+        <span class="rc-conf ${conf}">${esc(conf)} confidence</span>
+      </div>
+      <div class="rc-explanation">${esc(rc.explanation || '')}</div>
+      <div class="evidence-label">Evidence</div>
+      <ul class="evidence-list">${items}</ul>
+    </div>`;
+}
+
+// ── Section 4 ─────────────────────────────────────────────────────────
+
+function renderRemediation(rc) {
+  // We show a static representation of the fix before calling the API.
+  // The diff block will be updated once the API returns real diff data.
+  return `
+    <div class="diff-block" id="diff-block">
+      <div class="diff-header">app/main.py &mdash; pending fix generation</div>
+      <div class="diff-line" style="color:var(--muted);padding:8px 12px;font-size:10px">
+        Generating fix...
+      </div>
+    </div>
+    <div class="fix-explanation" id="fix-explanation"></div>
+    <button class="apply-btn" id="apply-btn" onclick="applyFix()" disabled>
+      Apply Fix
+    </button>
+    <div id="fix-loading" class="loading-row" style="display:none;margin-top:16px">
+      <span class="spinner"></span>Applying fix and verifying...
+    </div>
+    <div id="fix-error" style="display:none"></div>`;
+}
+
+// ── Section 5 ─────────────────────────────────────────────────────────
+
+function renderVerification(data) {
+  const el = document.getElementById('verify-content');
+  const checks = data.checks || [];
+
+  let html = '<div class="verify-checks" id="check-rows">';
+  checks.forEach((c, i) => {
+    const icon = c.passed ? '&#10003;' : '&#10007;';
+    const iconCls = c.passed ? 'ok' : 'fail';
+    html += `
+      <div class="check-row" id="chk-${i}">
+        <span class="check-icon ${iconCls}">${icon}</span>
+        <span class="check-name">${esc(c.name)}</span>
+        <span class="check-detail">${esc(c.detail || '')}</span>
+      </div>`;
+  });
+  html += '</div>';
+  html += `
+    <div class="verify-counter" id="verify-counter">
+      ${esc(data.passed_count)}<span class="denom"> / ${esc(data.total_count)}</span> passed
+    </div>`;
+
+  if (data.verification_status === 'RESOLVED') {
+    html += `
+      <div class="resolved-wrap">
+        <div class="resolved-stamp" id="resolved-stamp">
+          <div class="stamp-word">Resolved</div>
+          <div class="stamp-sub">Incident #1042 &mdash; fix verified</div>
+        </div>
+      </div>`;
+  } else {
+    html += `<div class="err-banner">Verification status: ${esc(data.verification_status)}</div>`;
+  }
+
+  el.innerHTML = html;
+  show('s5');
+
+  // Stagger check rows in
+  checks.forEach((_, i) => {
+    setTimeout(() => {
+      const row = document.getElementById('chk-' + i);
+      if (row) row.classList.add('visible');
+    }, i * 280);
+  });
+
+  // Counter + stamp
+  setTimeout(() => {
+    const ctr = document.getElementById('verify-counter');
+    if (ctr) ctr.classList.add('show');
+  }, checks.length * 280 + 200);
+
+  if (data.verification_status === 'RESOLVED') {
+    setTimeout(() => {
+      const stamp = document.getElementById('resolved-stamp');
+      if (stamp) stamp.classList.add('show');
+
+      // Update incident status badge
+      const badge = document.getElementById('inc-status-badge');
+      if (badge) {
+        badge.textContent = 'Resolved';
+        badge.className = 'badge resolved';
+      }
+    }, checks.length * 280 + 700);
+  }
+}
+
+// ── Apply Fix ─────────────────────────────────────────────────────────
+
+async function applyFix() {
+  const btn = document.getElementById('apply-btn');
+  btn.disabled = true;
+  document.getElementById('fix-loading').style.display = 'flex';
+  document.getElementById('fix-error').style.display = 'none';
+
+  let data;
+  try {
+    const body = _report ? JSON.stringify({ root_cause: _report.root_cause }) : '{}';
+    const resp = await fetch(`${API}/apply-fix-and-verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      throw new Error(`HTTP ${resp.status}: ${txt.slice(0, 300)}`);
+    }
+    data = await resp.json();
+  } catch(err) {
+    document.getElementById('fix-loading').style.display = 'none';
+    document.getElementById('fix-error').style.display = '';
+    document.getElementById('fix-error').innerHTML =
+      `<div class="err-banner">Apply-fix failed: ${esc(err.message)}</div>`;
+    btn.disabled = false;
+    return;
+  }
+
+  document.getElementById('fix-loading').style.display = 'none';
+
+  // Update diff block with real diff data
+  const diff = data.diff || {};
+  const diffBlock = document.getElementById('diff-block');
+  if (diffBlock && diff.before_line) {
+    diffBlock.innerHTML = `
+      <div class="diff-header">${esc(diff.file || 'app/main.py')}</div>
+      <div class="diff-line minus">${esc(diff.before_line)}</div>
+      <div class="diff-line plus">${esc(diff.after_line)}</div>`;
+  }
+
+  const fixEl = document.getElementById('fix-explanation');
+  if (fixEl) fixEl.textContent = data.fix_explanation || '';
+
+  renderVerification(data);
+}
+
+// ── Main flow ─────────────────────────────────────────────────────────
+
+async function run() {
+  // Fetch investigation
+  let data;
+  try {
+    const resp = await fetch(`${API}/investigate-incident`, { method: 'POST' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    data = await resp.json();
+  } catch(err) {
+    document.getElementById('inc-content').innerHTML =
+      `<div class="err-banner">
+        Could not reach backend: ${esc(err.message)}<br>
+        <span class="mono" style="font-size:10px">python -m uvicorn backend.main:app --port 8001</span>
+      </div>`;
+    return;
+  }
+
+  _report = data;
+  const agents = data.agents || {};
+
+  // Section 1
+  document.getElementById('inc-content').innerHTML =
+    renderIncident(data.incident_id || 1042, data.incident || {});
+
+  // Section 2
+  show('s2');
+
+  // Stagger agent reveals 600ms apart
+  setTimeout(() => {
+    const p = document.getElementById('prev-log');
+    p.className = '';
+    p.innerHTML = renderLogPreview(agents.log || {});
+    document.getElementById('det-log').innerHTML = renderLogDetail(agents.log || {});
+    setAgentDone('log');
+  }, 300);
+
+  setTimeout(() => {
+    const p = document.getElementById('prev-code');
+    p.className = '';
+    p.innerHTML = renderCodePreview(agents.code || {});
+    document.getElementById('det-code').innerHTML = renderCodeDetail(agents.code || {});
+    setAgentDone('code');
+  }, 900);
+
+  setTimeout(() => {
+    const p = document.getElementById('prev-data');
+    p.className = '';
+    p.innerHTML = renderDataPreview(agents.data || {});
+    document.getElementById('det-data').innerHTML = renderDataDetail(agents.data || {});
+    setAgentDone('data');
+  }, 1500);
+
+  setTimeout(() => {
+    const p = document.getElementById('prev-test');
+    p.className = '';
+    p.innerHTML = renderTestPreview(agents.test || {});
+    document.getElementById('det-test').innerHTML = renderTestDetail(agents.test || {});
+    setAgentDone('test');
+  }, 2100);
+
+  // Section 3 — root cause
+  setTimeout(() => {
+    show('s3');
+    document.getElementById('rc-content').innerHTML =
+      renderRootCause(data.root_cause || {}, data.evidence || []);
+  }, 2700);
+
+  // Section 4 — remediation skeleton (diff filled after apply)
+  setTimeout(() => {
+    show('s4');
+    document.getElementById('fix-content').innerHTML = renderRemediation(data.root_cause || {});
+    // Enable apply button
+    document.getElementById('apply-btn').disabled = false;
+  }, 3200);
+}
+
+run();
+</script>
+</body>
+</html>

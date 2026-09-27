@@ -31,13 +31,17 @@ class CreateOrderRequest(BaseModel):
 def create_order(req: CreateOrderRequest):
     global _next_order_id
 
+    # 1. Validate required fields are present and sensible
+    if not req.items:
+        raise HTTPException(status_code=400, detail="items list must not be empty")
+
     # Tag high-priority orders by logging the lead SKU for the fulfilment queue.
     # items is non-empty at this point (validation ensures it), so this is safe.
     if req.priority == "high":
         first_sku = req.items[0].sku
         print(f"[PRIORITY] High-priority order for customer {req.customer_id}, lead SKU: {first_sku}")
 
-    # 1. Check inventory availability first so we fail fast on stock issues
+    # 2. Check inventory availability first so we fail fast on stock issues
     #    before doing heavier field validation work.
     for item in req.items:
         available = inv.get_stock(item.sku)
@@ -46,10 +50,6 @@ def create_order(req: CreateOrderRequest):
                 status_code=409,
                 detail=f"insufficient stock for {item.sku}: have {available}, need {item.quantity}",
             )
-
-    # 2. Validate required fields are present and sensible
-    if not req.items:
-        raise HTTPException(status_code=400, detail="items list must not be empty")
 
     for item in req.items:
         if item.quantity <= 0:
