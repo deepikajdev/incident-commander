@@ -31,6 +31,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ---------------------------------------------------------------------------
+# /health  — lightweight liveness probe (no external deps)
+# ---------------------------------------------------------------------------
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
 _REPO_ROOT = str(Path(__file__).parent.parent.resolve())
 _REPO_PATH = Path(_REPO_ROOT)
 _INCIDENT_LOG = _REPO_PATH / "incident" / "incident_log.json"
@@ -50,33 +59,38 @@ def investigate_incident():
     Run all four agents, synthesise a root-cause report with evidence checklist.
     Returns: {incident_id, incident, agents, root_cause, evidence}
     """
-    if not _INCIDENT_LOG.exists():
-        raise HTTPException(
-            status_code=404,
-            detail=f"incident_log.json not found at {_INCIDENT_LOG}",
-        )
+    try:
+        if not _INCIDENT_LOG.exists():
+            raise HTTPException(
+                status_code=404,
+                detail=f"incident_log.json not found at {_INCIDENT_LOG}",
+            )
 
-    incident = json.loads(_INCIDENT_LOG.read_text(encoding="utf-8"))
+        incident = json.loads(_INCIDENT_LOG.read_text(encoding="utf-8"))
 
-    log_result  = log_agent(incident)
-    code_result = code_agent(_REPO_ROOT, incident)
-    data_result = data_agent(_REPO_ROOT)
-    test_result = test_agent(_REPO_ROOT, incident)
+        log_result  = log_agent(incident)
+        code_result = code_agent(_REPO_ROOT, incident)
+        data_result = data_agent(_REPO_ROOT)
+        test_result = test_agent(_REPO_ROOT, incident)
 
-    synthesis = build_root_cause_report(log_result, code_result, data_result, test_result)
+        synthesis = build_root_cause_report(log_result, code_result, data_result, test_result)
 
-    return {
-        "incident_id": _INCIDENT_ID,
-        "incident": incident,
-        "agents": {
-            "log":  log_result,
-            "code": code_result,
-            "data": data_result,
-            "test": test_result,
-        },
-        "root_cause": synthesis.get("root_cause"),
-        "evidence":   synthesis.get("evidence", []),
-    }
+        return {
+            "incident_id": _INCIDENT_ID,
+            "incident": incident,
+            "agents": {
+                "log":  log_result,
+                "code": code_result,
+                "data": data_result,
+                "test": test_result,
+            },
+            "root_cause": synthesis.get("root_cause"),
+            "evidence":   synthesis.get("evidence", []),
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -164,6 +178,15 @@ def apply_fix_and_verify(req: Optional[FixRequest] = None):
             "verification_status": "RESOLVED" | "STILL_BROKEN"
         }
     """
+    try:
+        return _apply_fix_and_verify_impl(req)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+def _apply_fix_and_verify_impl(req: Optional[FixRequest] = None):
     # Step 1: ensure we have a root cause
     if req is None or not req.root_cause:
         incident = json.loads(_INCIDENT_LOG.read_text(encoding="utf-8"))
@@ -249,3 +272,4 @@ def apply_fix_and_verify(req: Optional[FixRequest] = None):
         "total_count":      total_count,
         "verification_status": verification_status,
     }
+
